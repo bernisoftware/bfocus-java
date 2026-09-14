@@ -1,0 +1,41 @@
+# TEMPORÁRIO — verifica as credenciais de publicação (não publica nada; imprime só ok/falhou).
+# Some no 1º release: o scripts/release-sdks.sh do monorepo substitui o conteúdo deste espelho.
+name: verifica-credenciais
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  central:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Maven Central aceita MAVEN_CENTRAL_USERNAME + MAVEN_CENTRAL_PASSWORD
+        env:
+          U: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          P: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: |
+          [ -n "$U" ] && [ -n "$P" ] || { echo "::error::MAVEN_CENTRAL_USERNAME ou MAVEN_CENTRAL_PASSWORD vazio"; exit 1; }
+          auth=$(printf %s "$U:$P" | base64 -w0); echo "::add-mask::$auth"
+          code=$(curl -s -o r.json -w '%{http_code}' -H "Authorization: Bearer $auth" \
+            "https://central.sonatype.com/api/v1/publisher/published?namespace=br.com.bernisoftware&name=bzapper&version=0.3.0")
+          echo "Central HTTP $code — $(head -c 200 r.json 2>/dev/null)"
+          case "$code" in 200) echo "OK: Maven Central aceitou";; *) echo "::error::Maven Central recusou (HTTP $code)"; exit 1;; esac
+  gpg:
+    runs-on: ubuntu-latest
+    steps:
+      - name: MAVEN_GPG_PRIVATE_KEY é a chave certa e MAVEN_GPG_PASSPHRASE a abre
+        env:
+          K: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          P: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          [ -n "$K" ] && [ -n "$P" ] || { echo "::error::MAVEN_GPG_PRIVATE_KEY ou MAVEN_GPG_PASSPHRASE vazio"; exit 1; }
+          printf '%s\n' "$K" | gpg --batch --import 2>&1 | grep -E 'secret keys (read|imported)' || true
+          if gpg --list-secret-keys --with-colons | grep -q ':FD3D03E29007A5FC6F903AE1A410E04CCA8F8B14:'; then
+            echo "OK: a chave importada é a FD3D03E29007A5FC6F903AE1A410E04CCA8F8B14"
+          else
+            echo "::error::a chave em MAVEN_GPG_PRIVATE_KEY não é a FD3D03E29007A5FC6F903AE1A410E04CCA8F8B14"; gpg --list-secret-keys --keyid-format=long; exit 1
+          fi
+          if echo teste | gpg --batch --pinentry-mode loopback --passphrase "$P" -u FD3D03E29007A5FC6F903AE1A410E04CCA8F8B14 --clearsign >/dev/null 2>&1; then
+            echo "OK: MAVEN_GPG_PASSPHRASE abre a chave"
+          else
+            echo "::error::MAVEN_GPG_PASSPHRASE não abre a chave"; exit 1
+          fi
