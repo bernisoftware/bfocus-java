@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>br.com.bernisoftware</groupId>
+  <artifactId>bfocus</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <name>bFocus Java SDK</name>
+  <description>SDK oficial Java da API pública do bFocus: clientes, produtos, release notes, base de conhecimento e agentes de IA. Sem dependências de runtime.</description>
+  <url>https://github.com/bernisoftware/bfocus-java</url>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <organization>
+    <name>Berni Software</name>
+    <url>https://bfocus.com.br</url>
+  </organization>
+
+  <developers>
+    <developer>
+      <name>Berni Software</name>
+      <email>tecnologia@bernisoftware.com.br</email>
+      <organization>Berni Software</organization>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/bernisoftware/bfocus-java.git</connection>
+    <developerConnection>scm:git:git@github.com:bernisoftware/bfocus-java.git</developerConnection>
+    <url>https://github.com/bernisoftware/bfocus-java</url>
+  </scm>
+
+  <properties>
+    <!-- Piso: Java 11 (java.net.http.HttpClient). -->
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <junit.version>5.10.2</junit.version>
+    <surefire.version>3.2.5</surefire.version>
+  </properties>
+
+  <!-- ZERO dependências de runtime: JSON é um codec interno (br.com.bernisoftware.bfocus.internal). -->
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <compilerArgs>
+            <arg>-Xlint:all</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire.version}</version>
+        <configuration>
+          <trimStackTrace>false</trimStackTrace>
+          <systemPropertyVariables>
+            <!-- VersionTest lê o pom.xml e o Version.java daqui (o mesmo que o release-sdks.sh bumpa). -->
+            <bfocus.projectDir>${project.basedir}</bfocus.projectDir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.1</version>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Automatic-Module-Name>br.com.bernisoftware.bfocus</Automatic-Module-Name>
+              <Implementation-Title>${project.name}</Implementation-Title>
+              <Implementation-Version>${project.version}</Implementation-Version>
+              <Implementation-Vendor>Berni Software</Implementation-Vendor>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- Roda a MESMA suíte (conformidade + unitários) contra o jar empacotado, não contra target/classes:
+         o failsafe põe o artefato principal no classpath (e o VersionTest confere que a SDK veio do .jar).
+         O surefire fica desligado aqui para a suíte não rodar duas vezes. Uso: mvn -P artifact verify -->
+    <profile>
+      <id>artifact</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${surefire.version}</version>
+            <configuration>
+              <skip>true</skip>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <version>${surefire.version}</version>
+            <configuration>
+              <trimStackTrace>false</trimStackTrace>
+              <includes>
+                <include>**/*Test.java</include>
+              </includes>
+              <systemPropertyVariables>
+                <bfocus.artifactTest>true</bfocus.artifactTest>
+                <bfocus.projectDir>${project.basedir}</bfocus.projectDir>
+              </systemPropertyVariables>
+            </configuration>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!-- Publicação no Maven Central (Sonatype Central Portal): sources + javadoc + assinatura GPG.
+         Uso no CI: mvn -P release deploy. Local, sem GPG: mvn -P release -DskipTests -Dgpg.skip package -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.7.0</version>
+            <configuration>
+              <excludePackageNames>br.com.bernisoftware.bfocus.internal</excludePackageNames>
+              <!-- Getters documentados só com @return (estilo do projeto): o grupo "missing" do doclint acusaria
+                   "no main description" em todos. HTML, referências e sintaxe continuam checados. -->
+              <doclint>all,-missing</doclint>
+              <doctitle>bFocus Java SDK ${project.version}</doctitle>
+              <windowtitle>bFocus Java SDK ${project.version}</windowtitle>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.4</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.6.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+              <!-- 'uploaded' (não 'published'): o polling de status do plugin 0.6.0 quebra ao ler o campo
+                   "warnings" do Central (visto no bZapper). Com autoPublish=true publica assim mesmo. -->
+              <waitUntil>uploaded</waitUntil>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>
