@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -113,6 +114,21 @@ class ConformanceTest {
             }
             return bf.customers().interactions().create(a.str("external_id"), b.build());
         });
+        m.put("customers.batch", (bf, a) -> bf.customers().batch(customerBatchItems(a)));
+        m.put("customers.identifiers.add", (bf, a) -> bf.customers().identifiers()
+                .add(a.str("external_id"), a.str("extra_id"), a.str("label")));
+        m.put("customers.identifiers.remove", (bf, a) -> bf.customers().identifiers()
+                .remove(a.str("external_id"), a.str("extra_id")));
+        // Pessoas
+        m.put("people.upsert", (bf, a) -> bf.people()
+                .upsert(a.str("customer_external_id"), a.str("person_external_id"), personUpsert(a)));
+        m.put("people.list", (bf, a) -> bf.people().list(a.str("customer_external_id")));
+        m.put("people.delete", (bf, a) -> bf.people().delete(a.str("customer_external_id"), a.str("person_external_id")));
+        m.put("people.batch", (bf, a) -> bf.people().batch(personBatchItems(a)));
+        m.put("people.identifiers.add", (bf, a) -> bf.people().identifiers()
+                .add(a.str("person_external_id"), a.str("extra_id"), a.str("label")));
+        m.put("people.identifiers.remove", (bf, a) -> bf.people().identifiers()
+                .remove(a.str("person_external_id"), a.str("extra_id")));
         // Produtos
         m.put("products.list", (bf, a) -> bf.products().list(a.has("include_inactive") ? a.bool("include_inactive") : null, null));
         m.put("products.get", (bf, a) -> bf.products().get(a.str("slug")));
@@ -171,6 +187,53 @@ class ConformanceTest {
             }
         }
         return b.build();
+    }
+
+    private static List<CustomerBatchItem> customerBatchItems(Args a) {
+        List<CustomerBatchItem> out = new ArrayList<>();
+        for (Args x : a.objects("items")) {
+            out.add(CustomerBatchItem.of(x.str("external_id"), customerUpsert(x)));
+        }
+        return out;
+    }
+
+    private static PersonUpsert personUpsert(Args a) {
+        PersonUpsert.Builder b = PersonUpsert.builder();
+        if (a.has("name")) {
+            b.name(a.str("name"));
+        }
+        if (a.has("email")) {
+            b.email(a.str("email"));
+        }
+        if (a.has("phone")) {
+            b.phone(a.str("phone"));
+        }
+        if (a.has("role")) {
+            b.role(a.str("role"));
+        }
+        if (a.has("access")) {
+            b.access(a.bool("access"));
+        }
+        if (a.has("is_primary")) {
+            b.isPrimary(a.bool("is_primary"));
+        }
+        if (a.has("extra_emails")) {
+            Object v = a.raw("extra_emails");
+            b.extraEmails(v == null ? null : stringList(v));
+        }
+        if (a.has("extra_phones")) {
+            Object v = a.raw("extra_phones");
+            b.extraPhones(v == null ? null : stringList(v));
+        }
+        return b.build();
+    }
+
+    private static List<PersonBatchItem> personBatchItems(Args a) {
+        List<PersonBatchItem> out = new ArrayList<>();
+        for (Args x : a.objects("items")) {
+            out.add(PersonBatchItem.of(x.str("customer_external_id"), x.str("external_id"), personUpsert(x)));
+        }
+        return out;
     }
 
     private static CustomFieldInput customField(Args f) {
@@ -675,6 +738,23 @@ class ConformanceTest {
             String customer = (String) v.get("customer_external_id");
             assertEquals(v.get("expected"), WidgetIdentity.sign(secret, user, customer), "WidgetIdentity.sign " + user);
             assertEquals(v.get("expected"), BfocusClient.signWidgetIdentity(secret, user, customer), "BfocusClient.signWidgetIdentity " + user);
+        }
+    }
+
+    @Test
+    void vetoresDeAssinaturaV2() {
+        List<Map<String, Object>> vectors = mapList(CASES.get("signatures_v2"));
+        assertFalse(vectors.isEmpty());
+        for (Map<String, Object> v : vectors) {
+            String secret = (String) v.get("secret");
+            String user = (String) v.get("user_external_id");
+            String customer = (String) v.get("customer_external_id");
+            Instant at = Instant.ofEpochSecond(((Number) v.get("timestamp")).longValue());
+            assertEquals(v.get("expected"), WidgetIdentity.signV2(secret, user, customer, at), "WidgetIdentity.signV2 " + user);
+            assertEquals(v.get("expected"), BfocusClient.signWidgetIdentityV2(secret, user, customer, at),
+                    "BfocusClient.signWidgetIdentityV2 " + user);
+            // fração de segundo é descartada (floor)
+            assertEquals(v.get("expected"), WidgetIdentity.signV2(secret, user, customer, at.plusMillis(999)), "floor " + user);
         }
     }
 

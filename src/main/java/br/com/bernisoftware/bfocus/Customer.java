@@ -3,8 +3,11 @@ package br.com.bernisoftware.bfocus;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-/** Cliente (empresa) — {@code CustomerOut}. */
-public final class Customer extends ApiObject {
+/**
+ * Cliente (empresa) — {@code CustomerOut}. Não é {@code final} só para {@link CustomerWithIdentifiers} (a mesma
+ * resposta com os identificadores extras); não dá para estender fora da SDK.
+ */
+public class Customer extends ApiObject {
     private final String id;
     private final String externalId;
     private final String name;

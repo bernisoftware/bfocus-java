@@ -3,6 +3,7 @@ package br.com.bernisoftware.bfocus;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -41,11 +42,15 @@ public final class BfocusClient implements AutoCloseable {
     /** Novas tentativas padrão (além da primeira). */
     public static final int DEFAULT_MAX_RETRIES = 2;
 
+    /** Máximo de itens por chamada de {@code customers().batch} e {@code people().batch} (limite da API). */
+    public static final int BATCH_MAX = 500;
+
     private final String baseUrl;
     private final Duration timeout;
     private final int maxRetries;
     private final Transport transport;
     private final CustomersResource customers;
+    private final PeopleResource people;
     private final ProductsResource products;
     private final ReleaseNotesResource releaseNotes;
     private final KbResource kb;
@@ -68,6 +73,7 @@ public final class BfocusClient implements AutoCloseable {
         this.maxRetries = b.maxRetries;
         this.transport = new Transport(b.apiKey, b.baseUrl, b.timeout, b.maxRetries, b.httpClient);
         this.customers = new CustomersResource(transport);
+        this.people = new PeopleResource(transport);
         this.products = new ProductsResource(transport);
         this.releaseNotes = new ReleaseNotesResource(transport);
         this.kb = new KbResource(transport);
@@ -89,6 +95,11 @@ public final class BfocusClient implements AutoCloseable {
     /** @return clientes (com contatos, produtos vinculados e interações) */
     public CustomersResource customers() {
         return customers;
+    }
+
+    /** @return pessoas dos clientes (desde 0.2.0) */
+    public PeopleResource people() {
+        return people;
     }
 
     /** @return catálogo de produtos */
@@ -137,6 +148,33 @@ public final class BfocusClient implements AutoCloseable {
      */
     public static String signWidgetIdentity(String secret, String userExternalId, String customerExternalId) {
         return WidgetIdentity.sign(secret, userExternalId, customerExternalId);
+    }
+
+    /**
+     * Assina a identidade v2 (com validade) — o mesmo que {@link WidgetIdentity#signV2(String, String, String)}.
+     * Local: sem rede e sem chave de API.
+     *
+     * @param secret segredo do widget (nunca o envie ao navegador)
+     * @param userExternalId {@code external_id} do usuário logado no seu sistema (sem {@code :})
+     * @param customerExternalId {@code external_id} do cliente (empresa) desse usuário
+     * @return {@code "v2.<ts>.<hex>"}, com o instante de agora
+     */
+    public static String signWidgetIdentityV2(String secret, String userExternalId, String customerExternalId) {
+        return WidgetIdentity.signV2(secret, userExternalId, customerExternalId);
+    }
+
+    /**
+     * Assina a identidade v2 num instante dado — o mesmo que
+     * {@link WidgetIdentity#signV2(String, String, String, Instant)}.
+     *
+     * @param secret segredo do widget (nunca o envie ao navegador)
+     * @param userExternalId {@code external_id} do usuário logado no seu sistema (sem {@code :})
+     * @param customerExternalId {@code external_id} do cliente (empresa) desse usuário
+     * @param now o instante da assinatura
+     * @return {@code "v2.<ts>.<hex>"}
+     */
+    public static String signWidgetIdentityV2(String secret, String userExternalId, String customerExternalId, Instant now) {
+        return WidgetIdentity.signV2(secret, userExternalId, customerExternalId, now);
     }
 
     /** Espera entre tentativas — substituível nos testes da SDK (a suíte não dorme de verdade). */

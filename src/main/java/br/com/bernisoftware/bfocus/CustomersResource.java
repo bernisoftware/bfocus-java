@@ -1,23 +1,28 @@
 package br.com.bernisoftware.bfocus;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * Clientes — {@code client.customers()}. Escopos: {@code customers:read} / {@code customers:write}.
- * Contatos, produtos vinculados e interações ficam em {@link #contacts()}, {@link #products()} e
- * {@link #interactions()}.
+ * Contatos, produtos vinculados, interações e identificadores extras ficam em {@link #contacts()},
+ * {@link #products()}, {@link #interactions()} e {@link #identifiers()}. As pessoas dos clientes ficam em
+ * {@link BfocusClient#people()}.
  */
 public final class CustomersResource {
     private final Transport transport;
     private final CustomerContactsResource contacts;
     private final CustomerProductsResource products;
     private final CustomerInteractionsResource interactions;
+    private final CustomerIdentifiersResource identifiers;
 
     CustomersResource(Transport transport) {
         this.transport = transport;
         this.contacts = new CustomerContactsResource(transport);
         this.products = new CustomerProductsResource(transport);
         this.interactions = new CustomerInteractionsResource(transport);
+        this.identifiers = new CustomerIdentifiersResource(transport);
     }
 
     /** @return contatos dos clientes */
@@ -33,6 +38,11 @@ public final class CustomersResource {
     /** @return histórico de interações dos clientes */
     public CustomerInteractionsResource interactions() {
         return interactions;
+    }
+
+    /** @return identificadores extras dos clientes (ids de outros sistemas seus) */
+    public CustomerIdentifiersResource identifiers() {
+        return identifiers;
     }
 
     /**
@@ -165,6 +175,35 @@ public final class CustomersResource {
      */
     public DeleteResult delete(String externalId, RequestOptions options) {
         return transport.call("DELETE", path(externalId), null, null, options, DeleteResult::from);
+    }
+
+    /**
+     * Cria ou atualiza até {@link BfocusClient#BATCH_MAX} (500) clientes numa requisição
+     * ({@code POST /customers/batch}). A SDK NÃO divide: acima de 500 itens lança {@link IllegalArgumentException}
+     * antes de qualquer requisição (o {@code index} de cada resultado é a posição no lote enviado). Lote vazio
+     * devolve o resultado zerado sem ir à API. Um item com erro não desfaz os outros.
+     *
+     * @param items os clientes (até 500)
+     * @return um resultado por item + {@code summary}
+     * @throws IllegalArgumentException mais de 500 itens ou item {@code null}
+     */
+    public BatchResult batch(Collection<CustomerBatchItem> items) {
+        return batch(items, null);
+    }
+
+    /**
+     * Lote de clientes — com opções da chamada (um lote = uma chamada lógica, com uma {@code idempotencyKey}).
+     *
+     * @param items os clientes (até 500)
+     * @param options opções da chamada; pode ser {@code null}
+     * @return um resultado por item + {@code summary}
+     */
+    public BatchResult batch(Collection<CustomerBatchItem> items, RequestOptions options) {
+        Map<String, Object> body = Batches.body("customers().batch", items);
+        if (body == null) {
+            return BatchResult.empty();
+        }
+        return transport.call("POST", "/customers/batch", null, body, options, BatchResult::from);
     }
 
     static String path(String externalId) {

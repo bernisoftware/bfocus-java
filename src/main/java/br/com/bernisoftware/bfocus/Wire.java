@@ -113,6 +113,11 @@ final class Wire {
         throw bad(key, "inteiro", v);
     }
 
+    /** Inteiro que pode vir {@code null} (ausente ou {@code null} → {@code null}). */
+    Integer integerOrNull(String key) {
+        return map.get(key) == null ? null : integer(key);
+    }
+
     Double decimal(String key) {
         Object v = map.get(key);
         if (v == null) {

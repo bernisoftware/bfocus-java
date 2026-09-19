@@ -1,7 +1,7 @@
 # bfocus-java
 
-SDK oficial em **Java** da API pública do [bFocus](https://bfocus.com.br): clientes, produtos, release notes,
-base de conhecimento e agentes de IA.
+SDK oficial em **Java** da API pública do [bFocus](https://bfocus.com.br): clientes, pessoas dos clientes, produtos,
+release notes, base de conhecimento e agentes de IA.
 
 Zero dependências de runtime (JSON próprio, `java.net.http`) · Java 11+ · modelos tipados e imutáveis · novas
 tentativas e idempotência automáticas.
@@ -41,8 +41,8 @@ Ela vai em `Authorization: Bearer <chave>` em toda requisição (a SDK cuida dis
 
 | Escopo | Permite |
 | --- | --- |
-| `customers:read` | Ler clientes, contatos, produtos vinculados e interações |
-| `customers:write` | Cadastrar, atualizar e excluir clientes, contatos e interações |
+| `customers:read` | Ler clientes, contatos, pessoas, produtos vinculados e interações |
+| `customers:write` | Cadastrar, atualizar e excluir clientes, contatos, pessoas, interações e identificadores extras; lotes de clientes e pessoas |
 | `products:read` | Ler o catálogo de produtos |
 | `products:write` | Cadastrar, atualizar e arquivar produtos |
 | `kb:read` | Ler e buscar artigos da base de conhecimento |
@@ -129,6 +129,145 @@ bf.customers().interactions().create("ERP 1042",
         InteractionCreate.builder("Pedido 1042 faturado.").authorEmail("carla@suaempresa.com.br").build());
 for (Interaction i : bf.customers().interactions().listAll("ERP 1042")) {
     System.out.println(i.getCreatedAt() + " " + i.getContent());
+}
+```
+## Pessoas
+
+Pessoa = quem usa o sistema do seu cliente e abre chamados/conversas. O `external_id` dela é o mesmo
+`user.externalId` que o widget recebe — por isso **não pode ter `:`** (use `-`, ex.: `app-77`).
+
+```java
+PersonUpsertResult p = bf.people().upsert("erp-1042", "app-77", PersonUpsert.builder()
+        .name("Paula Reis")
+        .email("paula@padaria.example")
+        .role("Financeiro")
+        .isPrimary(true)
+        .extraEmails("paula.reis@pessoal.example")   // somam aos e-mails que ela já tem
+        .build());
+System.out.println(p.getStatus());   // "created", "updated" ou "unchanged"
+
+for (Person pessoa : bf.people().list("erp-1042")) {
+    System.out.println(pessoa.getName() + " acesso=" + pessoa.hasAccess());
+}
+
+bf.people().delete("erp-1042", "app-77");   // retira o acesso; devolve a pessoa com hasAccess() == false
+bf.people().upsert("erp-1042", "app-77", PersonUpsert.builder().access(true).build());   // devolve o acesso
+```
+
+- O **e-mail (ou o telefone)** acha a pessoa que já chegou por e-mail ou por outro sistema: ela é **adotada**
+  (passa a ter o seu `external_id`), nunca duplicada.
+- A mesma pessoa enviada com **outro cliente** é **transferida** para ele.
+- `delete` não apaga: retira o acesso ao widget/portal. A pessoa continua no histórico (chamados, conversas).
+- Como nos outros upserts, só o que você informa muda (setter não chamado = omitido; `null`/`clear(...)` = vai
+  como `null`).
+
+## Lotes — clientes e pessoas
+
+`bf.customers().batch(...)` e `bf.people().batch(...)` gravam até **500 itens por chamada**
+(`BfocusClient.BATCH_MAX`). Acima disso a SDK lança `IllegalArgumentException` **antes** de qualquer requisição —
+ela não divide sozinha, porque o `index` de cada resultado é a posição no lote que **você** enviou. Divida assim:
+
+```java
+List<CustomerBatchItem> todos = new ArrayList<>();
+for (Cliente c : meusClientes) {                        // o seu modelo
+    todos.add(CustomerBatchItem.of("erp-" + c.id, CustomerUpsert.builder()
+            .name(c.nome).document(c.cnpj).email(c.email).build()));
+}
+for (int i = 0; i < todos.size(); i += BfocusClient.BATCH_MAX) {
+    List<CustomerBatchItem> fatia = todos.subList(i, Math.min(i + BfocusClient.BATCH_MAX, todos.size()));
+    BatchResult r = bf.customers().batch(fatia);
+    for (BatchItemResult item : r.getResults()) {
+        if (item.isError()) {
+            CustomerBatchItem enviado = fatia.get(item.getIndex());   // index = posição NESTA fatia
+            log.warn("cliente {} não gravou: {} (HTTP {})", enviado.getExternalId(), item.getError(), item.getCode());
+        }
+    }
+}
+```
+
+`CustomerBatchItem.of(externalId, CustomerUpsert)` e `PersonBatchItem.of(customerExternalId, externalId, PersonUpsert)`
+reaproveitam os mesmos corpos do upsert (o código que monta o `CustomerUpsert` do dia a dia serve para a carga).
+
+Cada resultado (`BatchItemResult`) traz `getIndex()`, `getStatus()` (`created`, `updated`, `unchanged` ou
+`error`), `getExternalId()`, `getMergedInto()` (o id enviado era um identificador extra: este é o principal do
+cadastro — atualize do seu lado), `getError()` (código estável, ex.: `NAME_REQUIRED`) e `getCode()` (o status HTTP
+que o item teria sozinho). `getSummary()` soma `created`, `updated`, `unchanged` e `error`. **Um item com erro não
+desfaz os outros.** Lista vazia devolve o resultado zerado sem fazer requisição.
+
+## Identificadores extras
+
+Liga o id de **outro sistema seu** (CRM, loja…) ao mesmo cadastro, que passa a ser achado por qualquer um deles:
+
+```java
+CustomerWithIdentifiers c = bf.customers().identifiers().add("erp-1042", "crm-88", "CRM");   // rótulo opcional
+c.getIdentifiers();                                              // [crm-88 (CRM, api)]
+bf.customers().identifiers().remove("erp-1042", "crm-88");
+
+bf.people().identifiers().add("app-77", "crm-p5");              // sem rótulo: sem corpo
+bf.people().identifiers().remove("app-77", "crm-p5");
+```
+
+É idempotente (ligar de novo não muda nada). Se o id já é de **outro** cadastro, a API devolve 409
+`IDENTIFIER_IN_USE` (`ConflictException`).
+
+## Sincronizar clientes e usuários do seu sistema
+
+**Ids com o prefixo do sistema, sem `:`.** A assinatura do widget recusa `:`, então use `-` como separador —
+`erp-1042` para clientes, `app-77` para pessoas — ou UUIDs puros. Assim vários sistemas seus convivem no mesmo
+bFocus sem colisão.
+
+**Carga inicial (no deploy):** clientes em fatias de 500 → vincule cada cliente ao produto → pessoas em fatias de
+500. Confira `getSummary().getError()` e registre os itens com erro.
+
+```java
+void cargaInicial(BfocusClient bf, List<CustomerBatchItem> clientes, List<PersonBatchItem> pessoas) {
+    for (int i = 0; i < clientes.size(); i += BfocusClient.BATCH_MAX) {
+        List<CustomerBatchItem> fatia = clientes.subList(i, Math.min(i + BfocusClient.BATCH_MAX, clientes.size()));
+        registrarErros("clientes", bf.customers().batch(fatia));
+        for (CustomerBatchItem c : fatia) {
+            bf.customers().products().attach(c.getExternalId(), "erp-cloud");   // liga o cliente ao produto
+        }
+    }
+    for (int i = 0; i < pessoas.size(); i += BfocusClient.BATCH_MAX) {
+        registrarErros("pessoas", bf.people().batch(pessoas.subList(i, Math.min(i + BfocusClient.BATCH_MAX, pessoas.size()))));
+    }
+}
+
+void registrarErros(String tipo, BatchResult r) {
+    for (BatchItemResult item : r.getResults()) {
+        if (item.isError()) {
+            log.warn("{} #{} ({}): {}", tipo, item.getIndex(), item.getExternalId(), item.getError());
+        }
+    }
+}
+```
+
+**Depois, no dia a dia**, espelhe cada evento do seu sistema:
+
+| No seu sistema | No bFocus |
+| --- | --- |
+| criou/alterou cliente | `bf.customers().upsert(id, ...)` |
+| criou/alterou usuário | `bf.people().upsert(clienteId, usuarioId, ...)` |
+| excluiu/desativou usuário | `bf.people().delete(clienteId, usuarioId)` |
+| excluiu cliente | `bf.customers().delete(id)` |
+| cliente passou a usar um produto | `bf.customers().products().attach(id, slug)` |
+
+Se um resultado de lote trouxer `getMergedInto()`, atualize o id do seu lado.
+
+**Nunca bloqueie a requisição do seu usuário esperando o bFocus.** Grave o evento numa fila (job/outbox) e mande
+de lá, com novas tentativas e backoff. A SDK já repete 429/5xx com a mesma `Idempotency-Key`; a fila cobre as
+indisponibilidades longas:
+
+```java
+// No seu serviço: só enfileira (mesma transação do banco, se for outbox).
+outbox.enfileirar("bfocus.person.upsert", usuario.getId());
+
+// No worker: executa; se lançar, a fila tenta de novo mais tarde.
+void processar(Evento ev) {
+    Usuario u = usuarios.buscar(ev.id());
+    bf.people().upsert("erp-" + u.getEmpresaId(), "app-" + u.getId(),
+            PersonUpsert.builder().name(u.getNome()).email(u.getEmail()).build(),
+            RequestOptions.idempotencyKey("person-upsert-" + ev.id()));
 }
 ```
 
@@ -300,7 +439,8 @@ try {
 ```
 
 Argumento inválido no seu código (chave vazia; parâmetro de caminho vazio, `"."` ou `".."`; `/` no `external_id`
-de um artigo) lança `IllegalArgumentException`/`NullPointerException` na hora, sem chamar a API.
+de um artigo; mais de 500 itens num `batch`; `:` no id do usuário da identidade v2) lança
+`IllegalArgumentException`/`NullPointerException` na hora, sem chamar a API.
 
 ## Novas tentativas e idempotência
 
@@ -322,7 +462,8 @@ bf.customers().interactions().create("ERP 1042", "Pedido 1042 faturado.",
 ```
 
 A mesma chave com outra requisição volta `IDEMPOTENCY_KEY_REUSED`. No `batchUpsert`, o 1º lote usa a sua chave
-como veio e os seguintes `"<chave>:2"`, `"<chave>:3"`… (sem chave, cada lote gera a sua).
+como veio e os seguintes `"<chave>:2"`, `"<chave>:3"`… (sem chave, cada lote gera a sua). `customers().batch` e
+`people().batch` são uma chamada só: a chave vale para o lote inteiro.
 
 ## Identidade do widget
 
@@ -338,6 +479,25 @@ String assinatura = WidgetIdentity.sign(
 ```
 
 `BfocusClient.signWidgetIdentity(...)` faz o mesmo.
+
+### Identidade v2 (com validade)
+
+A v2 carimba o instante da assinatura, então uma assinatura vazada deixa de valer sozinha:
+
+```java
+String userHash = WidgetIdentity.signV2(
+        System.getenv("BFOCUS_WIDGET_SECRET"),
+        "app-77",      // o usuário no seu sistema — sem ':'
+        "erp-1042");   // a empresa (cliente) dele
+// "v2.<ts>.<hex>": ts = segundos unix de agora; hex = HMAC-SHA256 de "v2:<ts>:app-77:erp-1042"
+```
+
+- Vai no mesmo lugar da v1 (o `userHash` do widget).
+- Vale de **7 dias atrás até 5 minutos à frente**: gere a cada renderização da página, **nunca guarde**.
+- O id do **usuário** não pode ter `:` (é o separador; a SDK lança `IllegalArgumentException`).
+- `WidgetIdentity.signV2(secret, usuario, cliente, instant)` assina num instante dado (testes);
+  `BfocusClient.signWidgetIdentityV2(...)` faz o mesmo.
+- A v1 continua aceita.
 
 ## Versões
 
