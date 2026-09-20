@@ -17,6 +17,7 @@ public class Person extends ApiObject {
     private final boolean primary;
     private final String customerExternalId;
     private final List<CustomField> customFields;
+    private final List<Identifier> identifiers;
 
     Person(Wire w) {
         super(w);
@@ -29,6 +30,7 @@ public class Person extends ApiObject {
         primary = w.bool("is_primary", false);
         customerExternalId = w.string("customer_external_id");
         customFields = w.list("custom_fields", CustomField::from);
+        identifiers = w.list("identifiers", Identifier::from);
     }
 
     static Person from(Object json) {
@@ -82,5 +84,10 @@ public class Person extends ApiObject {
      */
     public List<CustomField> getCustomFields() {
         return customFields;
+    }
+
+    /** @return identificadores EXTRAS desta pessoa (o principal é {@link #getExternalId()}); nunca {@code null} */
+    public List<Identifier> getIdentifiers() {
+        return identifiers;
     }
 }

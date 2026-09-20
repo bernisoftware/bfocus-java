@@ -6,6 +6,7 @@ public final class BatchItemResult extends ApiObject {
     private final String status;
     private final String externalId;
     private final String mergedInto;
+    private final boolean linked;
     private final String error;
     private final Integer code;
 
@@ -15,6 +16,7 @@ public final class BatchItemResult extends ApiObject {
         status = w.string("status");
         externalId = w.string("external_id");
         mergedInto = w.string("merged_into");
+        linked = w.bool("linked", false);
         error = w.string("error");
         code = w.integerOrNull("code");
     }
@@ -49,6 +51,11 @@ public final class BatchItemResult extends ApiObject {
      */
     public String getMergedInto() {
         return mergedInto;
+    }
+
+    /** @return {@code true} quando a pessoa já existia em outro cliente e este item a ligou também a este */
+    public boolean isLinked() {
+        return linked;
     }
 
     /** @return código estável do erro do item (ex.: {@code NAME_REQUIRED}); {@code null} quando deu certo */

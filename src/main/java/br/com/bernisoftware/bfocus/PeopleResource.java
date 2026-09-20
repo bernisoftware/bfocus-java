@@ -30,7 +30,7 @@ public final class PeopleResource {
      * Cria ou atualiza a pessoa ({@code PUT /customers/{external_id}/people/{person_external_id}}, corpo
      * {@code {"person": {…}}}). Só os campos informados mudam. O e-mail (ou telefone) acha a pessoa que já chegou
      * por e-mail ou por outro sistema — ela é adotada, nunca duplicada; a mesma pessoa em outro cliente é
-     * transferida.
+     * LIGADA a ele também (cadastro único em N clientes).
      *
      * <p>{@link PersonUpsert.Builder#customFields(java.util.List)} é a exceção ao "só o que vier muda": a lista
      * enviada SUBSTITUI a lista inteira de campos personalizados da pessoa — campo que ficar de fora é removido.
@@ -97,10 +97,10 @@ public final class PeopleResource {
      *
      * @param customerExternalId id do cliente no seu sistema
      * @param personExternalId id da pessoa no seu sistema
-     * @return a pessoa, com {@code access = false}
+     * @return a pessoa, com {@code access = false} (e {@code isUnlinked()} quando ela segue ativa em outros clientes)
      * @throws NotFoundException {@code PERSON_NOT_FOUND}
      */
-    public Person delete(String customerExternalId, String personExternalId) {
+    public PersonRevokeResult delete(String customerExternalId, String personExternalId) {
         return delete(customerExternalId, personExternalId, null);
     }
 
@@ -110,10 +110,11 @@ public final class PeopleResource {
      * @param customerExternalId id do cliente no seu sistema
      * @param personExternalId id da pessoa no seu sistema
      * @param options opções da chamada; pode ser {@code null}
-     * @return a pessoa, com {@code access = false}
+     * @return a pessoa, com {@code access = false} (e {@code isUnlinked()} quando ela segue ativa em outros clientes)
      */
-    public Person delete(String customerExternalId, String personExternalId, RequestOptions options) {
-        return transport.call("DELETE", path(customerExternalId, personExternalId), null, null, options, Person::from);
+    public PersonRevokeResult delete(String customerExternalId, String personExternalId, RequestOptions options) {
+        return transport.call("DELETE", path(customerExternalId, personExternalId), null, null, options,
+                PersonRevokeResult::from);
     }
 
     /**

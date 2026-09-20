@@ -18,6 +18,9 @@ public class Customer extends ApiObject {
     private final String notes;
     private final List<CustomField> customFields;
     private final boolean active;
+    private final String logoUrl;
+    private final List<String> extraEmails;
+    private final List<String> extraPhones;
     private final OffsetDateTime createdAt;
     private final OffsetDateTime updatedAt;
 
@@ -33,6 +36,9 @@ public class Customer extends ApiObject {
         notes = w.string("notes");
         customFields = w.list("custom_fields", CustomField::from);
         active = w.bool("is_active", false);
+        logoUrl = w.string("logo_url");
+        extraEmails = w.list("extra_emails", o -> o == null ? null : o.toString());
+        extraPhones = w.list("extra_phones", o -> o == null ? null : o.toString());
         createdAt = w.date("created_at");
         updatedAt = w.date("updated_at");
     }
@@ -89,6 +95,21 @@ public class Customer extends ApiObject {
     /** @return ativo ({@code is_active}) */
     public boolean isActive() {
         return active;
+    }
+
+    /** @return logotipo do cliente como a equipe subiu no bFocus, ou {@code null} */
+    public String getLogoUrl() {
+        return logoUrl;
+    }
+
+    /** @return e-mails adicionais (o principal é {@link #getEmail()}); lista imutável, nunca {@code null} */
+    public List<String> getExtraEmails() {
+        return extraEmails;
+    }
+
+    /** @return telefones adicionais (o principal é {@link #getPhone()}); lista imutável, nunca {@code null} */
+    public List<String> getExtraPhones() {
+        return extraPhones;
     }
 
     /** @return criado em, ou {@code null} */

@@ -156,7 +156,10 @@ bf.people().upsert("erp-1042", "app-77", PersonUpsert.builder().access(true).bui
 
 - O **e-mail (ou o telefone)** acha a pessoa que já chegou por e-mail ou por outro sistema: ela é **adotada**
   (passa a ter o seu `external_id`), nunca duplicada.
-- A mesma pessoa enviada com **outro cliente** é **transferida** para ele.
+- A mesma pessoa enviada com **outro cliente** NÃO é transferida: fica **ligada** também a ele
+  (`isLinked()` volta `true`). O cadastro é único e a mesma pessoa circula por vários clientes.
+- **O acesso é do vínculo.** `delete` (e `access(false)`) tira o acesso dela NESTE cliente, não nos
+  outros: `isUnlinked()` quer dizer que ela segue ativa em algum outro.
 - `delete` não apaga: retira o acesso ao widget/portal. A pessoa continua no histórico (chamados, conversas).
 - Como nos outros upserts, só o que você informa muda (setter não chamado = omitido; `null`/`clear(...)` = vai
   como `null`).
