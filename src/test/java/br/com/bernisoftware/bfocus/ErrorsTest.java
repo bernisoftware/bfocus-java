@@ -69,6 +69,28 @@ class ErrorsTest extends ServerTestBase {
     }
 
     @Test
+    void dataTrazODonoDoContatoTomado() {
+        // 409 acionável: `data` diz de QUEM é o contato (e a API repete em `validation`).
+        Map<String, Object> dono = obj("field", "email", "owner_external_id", "app-12",
+                "owner_name", "Paula Reis", "owner_customer_external_id", "erp-1042");
+        BfocusClient bf = client(raw(409, obj("error", "PERSON_EMAIL_TAKEN", "data", dono,
+                "validation", obj("field", "email", "owner_external_id", "app-12"))));
+        ConflictException err = assertThrows(ConflictException.class,
+                () -> bf.people().upsert("erp-1042", "app-77",
+                        PersonUpsert.builder().email("paula@padaria.example").build()));
+        assertEquals("PERSON_EMAIL_TAKEN", err.getCode());
+        assertEquals("app-12", err.getData().get("owner_external_id"));
+        assertEquals("erp-1042", err.getData().get("owner_customer_external_id"));
+        assertEquals("Paula Reis", err.getData().get("owner_name"));
+        assertEquals("app-12", err.getValidation().get("owner_external_id"));
+        assertThrows(UnsupportedOperationException.class, () -> err.getData().clear());
+
+        BfocusClient semDetalhe = client(fail(404, "CUSTOMER_NOT_FOUND"));
+        NotFoundException vazio = assertThrows(NotFoundException.class, () -> semDetalhe.customers().get("erp-1042"));
+        assertTrue(vazio.getData().isEmpty());
+    }
+
+    @Test
     void moduloNaoContratado() {
         BfocusClient bf = client(raw(403, obj("error", "MODULE_NOT_CONTRACTED", "request_id", "r"), "X-Required-Module", "atendimento"));
         PermissionDeniedException err = assertThrows(PermissionDeniedException.class, () -> bf.aiAgents().list());

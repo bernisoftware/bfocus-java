@@ -273,6 +273,7 @@ final class Transport implements AutoCloseable {
         String bodyMessage = null;
         String bodyRequestId = null;
         Map<String, String> validation = new LinkedHashMap<>();
+        Map<String, Object> data = new LinkedHashMap<>();
         if (!text.trim().isEmpty()) {
             try {
                 Object parsed = Json.parse(text);
@@ -281,6 +282,14 @@ final class Transport implements AutoCloseable {
                     error = nonEmptyString(root.get("error"));
                     bodyMessage = nonEmptyString(root.get("message"));
                     bodyRequestId = nonEmptyString(root.get("request_id"));
+                    // `data`: o detalhe estruturado do erro. A API também o repete em `validation`, mas quem
+                    // lê o erro precisa alcançá-lo sem depender dessa duplicação.
+                    Object d = root.get("data");
+                    if (d instanceof Map) {
+                        for (Map.Entry<?, ?> entry : ((Map<?, ?>) d).entrySet()) {
+                            data.put(String.valueOf(entry.getKey()), entry.getValue());
+                        }
+                    }
                     Object v = root.get("validation");
                     if (v instanceof Map) {
                         for (Map.Entry<?, ?> entry : ((Map<?, ?>) v).entrySet()) {
@@ -322,21 +331,21 @@ final class Transport implements AutoCloseable {
         String text2 = message.toString();
 
         if (status == 401) {
-            return new AuthenticationException(code, status, text2, requestId, validation, exposedRetryAfter, requiredScope, null);
+            return new AuthenticationException(code, status, text2, requestId, validation, data, exposedRetryAfter, requiredScope, null);
         } else if (status == 403) {
-            return new PermissionDeniedException(code, status, text2, requestId, validation, exposedRetryAfter, requiredScope, null);
+            return new PermissionDeniedException(code, status, text2, requestId, validation, data, exposedRetryAfter, requiredScope, null);
         } else if (status == 404) {
-            return new NotFoundException(code, status, text2, requestId, validation, exposedRetryAfter, requiredScope, null);
+            return new NotFoundException(code, status, text2, requestId, validation, data, exposedRetryAfter, requiredScope, null);
         } else if (status == 409) {
-            return new ConflictException(code, status, text2, requestId, validation, exposedRetryAfter, requiredScope, null);
+            return new ConflictException(code, status, text2, requestId, validation, data, exposedRetryAfter, requiredScope, null);
         } else if (status == 422) {
-            return new ValidationException(code, status, text2, requestId, validation, exposedRetryAfter, requiredScope, null);
+            return new ValidationException(code, status, text2, requestId, validation, data, exposedRetryAfter, requiredScope, null);
         } else if (status == 429) {
-            return new RateLimitException(code, status, text2, requestId, validation, exposedRetryAfter, requiredScope, null);
+            return new RateLimitException(code, status, text2, requestId, validation, data, exposedRetryAfter, requiredScope, null);
         } else if (status >= 500 && status <= 599) {
-            return new ServerException(code, status, text2, requestId, validation, exposedRetryAfter, requiredScope, null);
+            return new ServerException(code, status, text2, requestId, validation, data, exposedRetryAfter, requiredScope, null);
         }
-        return new BfocusException(code, status, text2, requestId, validation, exposedRetryAfter, requiredScope, null);
+        return new BfocusException(code, status, text2, requestId, validation, data, exposedRetryAfter, requiredScope, null);
     }
 
     static BfocusException invalidResponse(int status, String requestId, String reason, Throwable cause) {

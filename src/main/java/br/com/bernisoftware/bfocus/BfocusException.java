@@ -32,6 +32,9 @@ public class BfocusException extends RuntimeException {
     // declarado (Map) não é, e o -Xlint:serial do JDK 21 acusaria isso.
     @SuppressWarnings("serial")
     private final Map<String, String> validation;
+    // Idem: sempre emptyMap() ou unmodifiableMap(LinkedHashMap).
+    @SuppressWarnings("serial")
+    private final Map<String, Object> data;
     private final Duration retryAfter;
     private final String requiredScope;
 
@@ -49,6 +52,24 @@ public class BfocusException extends RuntimeException {
      */
     public BfocusException(String code, int status, String message, String requestId, Map<String, String> validation,
                            Duration retryAfter, String requiredScope, Throwable cause) {
+        this(code, status, message, requestId, validation, null, retryAfter, requiredScope, cause);
+    }
+
+    /**
+     * Cria o erro, com o {@code data} do corpo (útil também para simular falhas nos testes da sua aplicação).
+     *
+     * @param code código estável do erro
+     * @param status status HTTP ({@code 0} em erro de rede)
+     * @param message texto legível
+     * @param requestId id da requisição (informe ao suporte); pode ser {@code null}
+     * @param validation campo → motivo, em erros de validação; {@code null} = vazio
+     * @param data o {@code data} do corpo do erro; {@code null} = vazio
+     * @param retryAfter espera pedida pela API (só em 429); pode ser {@code null}
+     * @param requiredScope escopo que faltou na chave (só em 403 de escopo); pode ser {@code null}
+     * @param cause causa original; pode ser {@code null}
+     */
+    public BfocusException(String code, int status, String message, String requestId, Map<String, String> validation,
+                           Map<String, Object> data, Duration retryAfter, String requiredScope, Throwable cause) {
         super(message, cause);
         this.code = code;
         this.status = status;
@@ -56,6 +77,9 @@ public class BfocusException extends RuntimeException {
         this.validation = validation == null || validation.isEmpty()
                 ? Collections.<String, String>emptyMap()
                 : Collections.unmodifiableMap(new LinkedHashMap<>(validation));
+        this.data = data == null || data.isEmpty()
+                ? Collections.<String, Object>emptyMap()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(data));
         this.retryAfter = retryAfter;
         this.requiredScope = requiredScope;
     }
@@ -110,6 +134,21 @@ public class BfocusException extends RuntimeException {
      */
     public Map<String, String> getValidation() {
         return validation;
+    }
+
+    /**
+     * O {@code data} do corpo do erro: o detalhe estruturado que alguns erros trazem. Vazio nos demais.
+     *
+     * <p>É onde vem, por exemplo, de quem é o contato já usado num 409 {@code PERSON_EMAIL_TAKEN} /
+     * {@code PERSON_PHONE_TAKEN} ({@code field}, {@code owner_external_id}, {@code owner_name},
+     * {@code owner_customer_external_id}) e o {@code owner} de um {@code IDENTIFIER_IN_USE}. A API repete esse
+     * detalhe em {@link #getValidation()}, por compatibilidade com as SDKs que ainda não expunham {@code data}.
+     *
+     * @return mapa imutável, nunca {@code null}; valores como o JSON trouxe ({@code String}, {@code Long},
+     *     {@code Boolean}, {@code List}, {@code Map} ou {@code null})
+     */
+    public Map<String, Object> getData() {
+        return data;
     }
 
     /**

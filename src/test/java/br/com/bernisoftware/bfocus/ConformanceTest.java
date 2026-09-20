@@ -125,6 +125,8 @@ class ConformanceTest {
         m.put("people.list", (bf, a) -> bf.people().list(a.str("customer_external_id")));
         m.put("people.delete", (bf, a) -> bf.people().delete(a.str("customer_external_id"), a.str("person_external_id")));
         m.put("people.batch", (bf, a) -> bf.people().batch(personBatchItems(a)));
+        m.put("people.identifiers.list", (bf, a) -> bf.people().identifiers()
+                .list(a.str("person_external_id")));
         m.put("people.identifiers.add", (bf, a) -> bf.people().identifiers()
                 .add(a.str("person_external_id"), a.str("extra_id"), a.str("label")));
         m.put("people.identifiers.remove", (bf, a) -> bf.people().identifiers()

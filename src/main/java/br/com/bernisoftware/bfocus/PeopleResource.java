@@ -32,11 +32,22 @@ public final class PeopleResource {
      * por e-mail ou por outro sistema — ela é adotada, nunca duplicada; a mesma pessoa em outro cliente é
      * transferida.
      *
+     * <p>{@link PersonUpsert.Builder#customFields(java.util.List)} é a exceção ao "só o que vier muda": a lista
+     * enviada SUBSTITUI a lista inteira de campos personalizados da pessoa — campo que ficar de fora é removido.
+     *
+     * <p>{@link PersonUpsert.Builder#erase(String...)} APAGA contato ({@code "email"}, {@code "phone"} ou os dois).
+     * Não confunda com {@link PersonUpsert.Builder#clear(String...)}, que manda {@code null} — e em pessoa
+     * {@code null} quer dizer "não mexe".
+     *
      * @param customerExternalId id do cliente (empresa) no seu sistema
      * @param personExternalId id da pessoa no seu sistema
      * @param person campos a gravar
      * @return a pessoa gravada, com {@code status} ({@code created}/{@code updated}/{@code unchanged})
-     * @throws ConflictException ex.: {@code PERSON_EMAIL_STAFF} (o e-mail é de alguém da sua equipe)
+     * @throws ConflictException ex.: {@code PERSON_EMAIL_STAFF} (o e-mail é de alguém da sua equipe),
+     *     {@code PERSON_EMAIL_TAKEN}/{@code PERSON_PHONE_TAKEN} (o {@code getData()} diz de quem é o contato) ou
+     *     {@code PERSON_CONTACT_OTHER_CUSTOMER} (recusa definitiva: a pessoa é de outro cliente); ou
+     *     {@code PERSON_CLEAR_NOT_OWN_RECORD}, quando um {@code erase} chega por um identificador extra
+     * @throws ValidationException {@code PERSON_CLEAR_FIELD_INVALID} — campo fora da lista aceita em {@code erase}
      */
     public PersonUpsertResult upsert(String customerExternalId, String personExternalId, PersonUpsert person) {
         return upsert(customerExternalId, personExternalId, person, null);

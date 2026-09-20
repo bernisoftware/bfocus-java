@@ -10,7 +10,8 @@ import java.util.Objects;
 /**
  * Campos de uma pessoa, para {@link PeopleResource#upsert(String, String, PersonUpsert)} (a SDK envia
  * {@code {"person": {…}}}) e para {@link PersonBatchItem}. Parcial — veja {@link PatchRequest}: setter não chamado
- * = omitido; setter com {@code null} ou {@link Builder#clear(String...)} = vai como {@code null}.
+ * = omitido; setter com {@code null} ou {@link Builder#clear(String...)} = vai como {@code null}. Para APAGAR o
+ * e-mail ou o telefone (em pessoa, {@code null} é "não mexe"), use {@link Builder#erase(String...)}.
  *
  * <pre>{@code
  * PersonUpsert.builder()
@@ -30,7 +31,9 @@ public final class PersonUpsert extends PatchRequest {
             .field("access", "access")
             .field("isPrimary", "is_primary")
             .field("extraEmails", "extra_emails")
-            .field("extraPhones", "extra_phones");
+            .field("extraPhones", "extra_phones")
+            .field("customFields", "custom_fields")
+            .field("erase", "clear");
 
     private PersonUpsert(Map<String, Object> body) {
         super(body);
@@ -163,7 +166,73 @@ public final class PersonUpsert extends PatchRequest {
         }
 
         /**
+         * Campos personalizados da pessoa. Ao contrário de {@link #extraEmails(List)}/{@link #extraPhones(List)},
+         * a lista SUBSTITUI a lista inteira: mande o que o seu sistema tem hoje, porque campo que ficar de fora
+         * é REMOVIDO (lista vazia apaga todos). Não chamar o setter não mexe em nada. A visibilidade é decidida
+         * no bFocus e preservada entre sincronizações.
+         *
+         * @param customFields os campos ({@code null} = enviar {@code null})
+         * @return este builder
+         */
+        public Builder customFields(List<CustomFieldInput> customFields) {
+            if (customFields == null) {
+                state.set("custom_fields", null);
+                return this;
+            }
+            List<Object> maps = new ArrayList<>(customFields.size());
+            for (CustomFieldInput field : customFields) {
+                maps.add(Objects.requireNonNull(field, "customFields contém null").toMap());
+            }
+            state.set("custom_fields", Collections.unmodifiableList(maps));
+            return this;
+        }
+
+        /**
+         * Campos personalizados da pessoa (substituem a lista inteira).
+         *
+         * @param customFields os campos
+         * @return este builder
+         */
+        public Builder customFields(CustomFieldInput... customFields) {
+            return customFields(Arrays.asList(Objects.requireNonNull(customFields, "customFields")));
+        }
+
+        /**
+         * Campos a <b>APAGAR</b> nesta pessoa (o campo {@code clear} da API pública): {@code "email"},
+         * {@code "phone"} ou os dois.
+         *
+         * <p><b>Não é o {@link #clear(String...)}</b>, que manda o campo como {@code null} — e em PESSOA
+         * {@code null} quer dizer "não mexe". Apagar é EXPLÍCITO de propósito: {@code null}, lista vazia e não
+         * chamar o setter continuam significando "não mexe", e a SDK não traduz {@code null} em apagar.
+         *
+         * <p>Campo fora da lista aceita é RECUSADO pela API (422 {@code PERSON_CLEAR_FIELD_INVALID}), não
+         * ignorado. E só se limpa a PRÓPRIA ficha: alcançando a pessoa por um identificador EXTRA, a API recusa
+         * (409 {@code PERSON_CLEAR_NOT_OWN_RECORD}) — apagar contato de ficha alcançada por apelido seria apagar
+         * dado de outro sistema.
+         *
+         * @param fields os campos a apagar ({@code null} = enviar {@code null})
+         * @return este builder
+         */
+        public Builder erase(List<String> fields) {
+            state.set("clear", strings(fields, "erase"));
+            return this;
+        }
+
+        /**
+         * Campos a APAGAR nesta pessoa (ver {@link #erase(List)}).
+         *
+         * @param fields os campos a apagar
+         * @return este builder
+         */
+        public Builder erase(String... fields) {
+            return erase(Arrays.asList(Objects.requireNonNull(fields, "erase")));
+        }
+
+        /**
          * Campos a enviar como {@code null}, pelo nome Java ou JSON.
+         *
+         * <p>Em PESSOA isto <b>não apaga</b>: {@code null} significa "não mexe" no e-mail e no telefone. Para
+         * apagar de verdade, use {@link #erase(String...)}.
          *
          * @param fields os campos
          * @return este builder

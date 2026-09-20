@@ -161,6 +161,103 @@ bf.people().upsert("erp-1042", "app-77", PersonUpsert.builder().access(true).bui
 - Como nos outros upserts, só o que você informa muda (setter não chamado = omitido; `null`/`clear(...)` = vai
   como `null`).
 
+### Campos personalizados da pessoa
+
+`customFields` leva o que só existe no seu sistema (matrícula, centro de custo, filial). É a
+**exceção** ao "só o que vier muda": a lista enviada **substitui a lista inteira** — campo que
+ficar de fora é **removido**. Mande sempre a lista que o seu sistema tem hoje; não chamar o setter não mexe
+em nada, como em qualquer outro campo.
+
+A `visibility` é decidida no bFocus e **preservada entre sincronizações** — por isso ela não vai
+no envio, só volta na resposta: o seu ERP não rebaixa nem promove a exposição de um dado sem
+querer.
+
+Vale no upsert de pessoa, no lote de pessoas e na listagem de pessoas do cliente.
+
+```java
+PersonUpsertResult p = bf.people().upsert("erp-1042", "app-77", PersonUpsert.builder()
+        .customFields(   // a lista INTEIRA do seu sistema
+                CustomFieldInput.builder("matricula").label("Matrícula").value("4471").build(),
+                CustomFieldInput.builder("filial").label("Filial").value("Centro").build())
+        .build());
+
+for (CustomField campo : p.getCustomFields()) {
+    System.out.println(campo.getKey() + " " + campo.getValue() + " " + campo.getVisibility());
+}
+```
+
+### Apagar o e-mail ou o telefone da pessoa
+
+Um contato gravado errado ficava preso para sempre: enquanto a ficha errada segurasse o
+telefone, nenhum reenvio o soltava. `erase(...)` apaga (é o campo `clear` da API pública).
+
+```java
+bf.people().upsert("erp-1042", "app-77", PersonUpsert.builder()
+        .erase("phone")          // ou .erase("email", "phone")
+        .build());
+```
+
+Três regras que parecem contraintuitivas e são de propósito:
+
+- **Apagar é explícito, e `erase` é o único jeito.** `.phone(null)` e `.clear("phone")` mandam
+  `phone: null`, e em pessoa `null` (como a lista vazia e não chamar o setter) quer dizer **"não
+  mexe"** — a SDK não traduz `null` em apagar. Fazer o `null` apagar teria apagado, em silêncio e
+  na primeira carga seguinte, o dado de todo sistema que manda `null` para "não tenho esse valor".
+- **Campo fora da lista é recusado, não ignorado**: hoje só `"email"` e `"phone"`; qualquer outro
+  devolve 422 `PERSON_CLEAR_FIELD_INVALID` (`ValidationException`).
+- **Só se limpa a própria ficha.** Se você alcançou a pessoa por um identificador **extra**, a API
+  recusa com 409 `PERSON_CLEAR_NOT_OWN_RECORD` (`ConflictException`): apagar o contato de uma ficha
+  alcançada por apelido seria apagar dado de outro sistema. Para saber se o id que você tem em mãos
+  é o principal ou um extra, use `bf.people().identifiers().list(...)`.
+
+Vale no `people().upsert(...)` e no `people().batch(...)`.
+
+### Contato já usado: um 409 que você consegue resolver
+
+`PERSON_EMAIL_TAKEN` e `PERSON_PHONE_TAKEN` (409) não são "tente de novo": o e-mail (ou o
+telefone) já é de outra pessoa da conta. O erro diz **de quem**, em `getData()` (a API repete o mesmo
+detalhe em `getValidation()`, por compatibilidade):
+
+| campo | o que é |
+| --- | --- |
+| `field` | `email` ou `phone` — qual contato está tomado |
+| `owner_external_id` | o identificador da pessoa que já usa esse contato |
+| `owner_name` | o nome dela |
+| `owner_customer_external_id` | o cliente a que ela pertence |
+
+**É o `owner_customer_external_id` que decide a ação**, e os dois casos pedem coisas opostas:
+
+- **mesmo cliente que você enviou** → é quase sempre a MESMA pessoa em dois sistemas. Uma pessoa
+  tem **N identificadores**: registre o seu como **extra** dela. A partir daí o seu id encontra
+  essa pessoa.
+- **outro cliente** → ninguém decide sozinho a quem a pessoa pertence. Não force: registre o caso
+  e leve para quem conhece o cadastro. Unificar dois clientes é decisão de gente, não de um
+  casamento por e-mail.
+
+```java
+try {
+    bf.people().upsert("erp-1042", "app-77", PersonUpsert.builder()
+            .name("Paula Reis").email("paula@padaria.example").build());
+} catch (ConflictException e) {
+    if (!"PERSON_EMAIL_TAKEN".equals(e.getCode()) && !"PERSON_PHONE_TAKEN".equals(e.getCode())) {
+        throw e;
+    }
+    Map<String, Object> dono = e.getData();
+    if ("erp-1042".equals(dono.get("owner_customer_external_id"))) {
+        // A mesma pessoa, com dois ids: o seu vira mais um identificador dela.
+        bf.people().identifiers().add((String) dono.get("owner_external_id"), "app-77", "ERP");
+    } else {
+        // Dono em OUTRO cliente: não decida sozinho — registre e leve para o cadastro.
+        avisarCadastro(e.getCode(), dono);
+    }
+}
+```
+
+`PERSON_CONTACT_OTHER_CUSTOMER` (409) é o mesmo assunto pelo outro lado, e é **recusa
+definitiva**: a API não move mais uma pessoa de um cliente para outro só porque o e-mail (ou o
+telefone) casou. Repetir a chamada não resolve — trate como caso para o cadastro, nunca como
+falha temporária.
+
 ## Lotes — clientes e pessoas
 
 `bf.customers().batch(...)` e `bf.people().batch(...)` gravam até **500 itens por chamada**
@@ -209,6 +306,24 @@ bf.people().identifiers().remove("app-77", "crm-p5");
 
 É idempotente (ligar de novo não muda nada). Se o id já é de **outro** cadastro, a API devolve 409
 `IDENTIFIER_IN_USE` (`ConflictException`).
+
+### Ler os identificadores da pessoa (para reconciliar)
+
+`bf.people().list(...)` mostra só o identificador **principal** de cada pessoa. Quando dois cadastros
+seus eram a mesma pessoa, um dos ids virou **extra** — e some da listagem sem ter sumido do cadastro.
+É isso que faz a sua conferência fechar "633 de 636" sem explicar os 3.
+
+`identifiers().list(...)` é a fonte de verdade dessa conferência, e é **leitura**: antes dela era
+preciso ESCREVER (tentar um `add`) para descobrir o que tinha acontecido. Aceita no caminho o id
+principal **ou qualquer um dos extras**.
+
+```java
+PersonIdentifiers ids = bf.people().identifiers().list("crm-p5");   // o id extra que "sumiu"
+System.out.println(ids.getExternalId());                            // "app-77" — o principal
+for (Identifier i : ids.getIdentifiers()) {
+    System.out.println(i.getExternalId() + " " + i.getLabel() + " " + i.getSource());
+}
+```
 
 ## Sincronizar clientes e usuários do seu sistema
 
@@ -409,6 +524,11 @@ Qualquer resposta fora de 2xx lança `BfocusException` (unchecked) ou uma subcla
 | `RateLimitException` | 429 — `getRetryAfter()` (depois de esgotar as novas tentativas) |
 | `ServerException` | 5xx |
 | `NetworkException` | conexão/tempo esgotado — `getStatus() == 0`, `getCode()` = `"NETWORK_ERROR"` |
+
+Além de `getCode()`, `getStatus()`, `getRequestId()`, `getValidation()`, `getRetryAfter()` e
+`getRequiredScope()`, a exceção tem **`getData()`**: o `data` do corpo, com o detalhe estruturado que alguns erros
+trazem (vazio quando não há). É por ele que um 409 de contato tomado diz de **quem** é o contato — veja
+[Pessoas](#pessoas).
 
 **Decida pelo `getCode()`** — ele é estável (`CUSTOMER_NOT_FOUND`, `INTEGRATION_SCOPE_MISSING`,
 `VALIDATION_ERROR`…). A mensagem é texto para humanos e pode mudar. Ao falar com o suporte, informe o

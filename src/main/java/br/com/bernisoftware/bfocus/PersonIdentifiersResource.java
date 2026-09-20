@@ -14,6 +14,35 @@ public final class PersonIdentifiersResource {
     }
 
     /**
+     * Todos os identificadores da pessoa ({@code GET /people/{person_external_id}/identifiers}): o principal
+     * ({@link PersonIdentifiers#getExternalId()}) e os extras. Aceita no caminho o principal OU qualquer um dos
+     * extras. Escopo {@code customers:read}.
+     *
+     * <p>É a fonte de verdade para RECONCILIAR: {@link PeopleResource#list(String)} mostra só o identificador
+     * principal, então um id que virou extra some de lá sem ter sumido do cadastro — e, sem esta leitura, era
+     * preciso ESCREVER (tentar um {@link #add(String, String)}) para descobrir o que tinha acontecido.
+     *
+     * @param personExternalId id da pessoa no seu sistema — o principal ou qualquer um dos extras
+     * @return o identificador principal + todos os extras
+     * @throws NotFoundException {@code PERSON_NOT_FOUND}
+     */
+    public PersonIdentifiers list(String personExternalId) {
+        return list(personExternalId, null);
+    }
+
+    /**
+     * Todos os identificadores da pessoa — com opções da chamada.
+     *
+     * @param personExternalId id da pessoa no seu sistema — o principal ou qualquer um dos extras
+     * @param options opções da chamada; pode ser {@code null}
+     * @return o identificador principal + todos os extras
+     */
+    public PersonIdentifiers list(String personExternalId, RequestOptions options) {
+        return transport.call("GET", "/people/" + Paths.segment(personExternalId, "personExternalId") + "/identifiers",
+                null, null, options, PersonIdentifiers::from);
+    }
+
+    /**
      * Liga {@code extraId} à pessoa ({@code PUT /people/{person_external_id}/identifiers/{extra_id}}, sem corpo).
      * Idempotente.
      *

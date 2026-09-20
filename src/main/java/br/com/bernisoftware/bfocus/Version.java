@@ -12,7 +12,7 @@ public final class Version {
     }
 
     /** Versão do artefato {@code br.com.bernisoftware:bfocus}. */
-    public static final String VERSION = "0.2.0";
+    public static final String VERSION = "0.2.1";
 
     /** Identificação enviada em {@code X-Bfocus-Client} e {@code User-Agent}. */
     public static final String CLIENT_ID = "bfocus-java/" + VERSION;

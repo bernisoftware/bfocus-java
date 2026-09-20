@@ -1,5 +1,7 @@
 package br.com.bernisoftware.bfocus;
 
+import java.util.List;
+
 /**
  * Pessoa de um cliente — {@code PersonOut}: quem usa o sistema do cliente e abre chamados/conversas. O
  * {@code external_id} dela é o mesmo {@code user.externalId} do widget. Não é {@code final} só para
@@ -14,6 +16,7 @@ public class Person extends ApiObject {
     private final boolean access;
     private final boolean primary;
     private final String customerExternalId;
+    private final List<CustomField> customFields;
 
     Person(Wire w) {
         super(w);
@@ -25,6 +28,7 @@ public class Person extends ApiObject {
         access = w.bool("access", false);
         primary = w.bool("is_primary", false);
         customerExternalId = w.string("customer_external_id");
+        customFields = w.list("custom_fields", CustomField::from);
     }
 
     static Person from(Object json) {
@@ -69,5 +73,14 @@ public class Person extends ApiObject {
     /** @return {@code external_id} principal do cliente a que a pessoa pertence */
     public String getCustomerExternalId() {
         return customerExternalId;
+    }
+
+    /**
+     * Campos personalizados da pessoa. A {@code visibility} de cada um é definida no bFocus.
+     *
+     * @return a lista (imutável, possivelmente vazia)
+     */
+    public List<CustomField> getCustomFields() {
+        return customFields;
     }
 }
