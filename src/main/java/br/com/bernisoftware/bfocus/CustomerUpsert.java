@@ -24,6 +24,11 @@ public final class CustomerUpsert extends PatchRequest {
     static final PatchState.Spec SPEC = new PatchState.Spec("CustomerUpsert")
             .field("name", "name")
             .field("document", "document")
+            .field("kind", "kind")
+            .field("legalName", "legal_name")
+            .field("stateRegistration", "state_registration")
+            .field("municipalRegistration", "municipal_registration")
+            .field("idDocument", "id_document")
             .field("email", "email")
             .field("phone", "phone")
             .field("website", "website")
@@ -69,6 +74,62 @@ public final class CustomerUpsert extends PatchRequest {
          */
         public Builder document(String document) {
             state.set("document", document);
+            return this;
+        }
+
+        /**
+         * Tipo do CONTRATANTE: {@code pj} (empresa) ou {@code pf} (pessoa física). Não enviando, o bFocus deduz
+         * do documento. Cliente é a CONTA, não a pessoa: uma conta PF pode ter várias pessoas dentro.
+         *
+         * @param kind {@code pj}, {@code pf} ou {@code null}
+         * @return este builder
+         */
+        public Builder kind(String kind) {
+            state.set("kind", kind);
+            return this;
+        }
+
+        /**
+         * Só PJ: razão social, quando difere do nome fantasia que vai em {@link #name(String)}.
+         *
+         * @param legalName a razão social ({@code null} = limpar)
+         * @return este builder
+         */
+        public Builder legalName(String legalName) {
+            state.set("legalName", legalName);
+            return this;
+        }
+
+        /**
+         * Só PJ: inscrição estadual (aceita {@code ISENTO}).
+         *
+         * @param stateRegistration a inscrição ({@code null} = limpar)
+         * @return este builder
+         */
+        public Builder stateRegistration(String stateRegistration) {
+            state.set("stateRegistration", stateRegistration);
+            return this;
+        }
+
+        /**
+         * Só PJ: inscrição municipal.
+         *
+         * @param municipalRegistration a inscrição ({@code null} = limpar)
+         * @return este builder
+         */
+        public Builder municipalRegistration(String municipalRegistration) {
+            state.set("municipalRegistration", municipalRegistration);
+            return this;
+        }
+
+        /**
+         * Só PF: RG e órgão emissor (texto livre — o formato varia por estado).
+         *
+         * @param idDocument o documento ({@code null} = limpar)
+         * @return este builder
+         */
+        public Builder idDocument(String idDocument) {
+            state.set("idDocument", idDocument);
             return this;
         }
 

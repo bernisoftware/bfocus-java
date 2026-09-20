@@ -18,6 +18,11 @@ public class Customer extends ApiObject {
     private final String notes;
     private final List<CustomField> customFields;
     private final boolean active;
+    private final String kind;
+    private final String legalName;
+    private final String stateRegistration;
+    private final String municipalRegistration;
+    private final String idDocument;
     private final String logoUrl;
     private final List<String> extraEmails;
     private final List<String> extraPhones;
@@ -36,6 +41,11 @@ public class Customer extends ApiObject {
         notes = w.string("notes");
         customFields = w.list("custom_fields", CustomField::from);
         active = w.bool("is_active", false);
+        kind = w.string("kind");
+        legalName = w.string("legal_name");
+        stateRegistration = w.string("state_registration");
+        municipalRegistration = w.string("municipal_registration");
+        idDocument = w.string("id_document");
         logoUrl = w.string("logo_url");
         extraEmails = w.list("extra_emails", o -> o == null ? null : o.toString());
         extraPhones = w.list("extra_phones", o -> o == null ? null : o.toString());
@@ -95,6 +105,34 @@ public class Customer extends ApiObject {
     /** @return ativo ({@code is_active}) */
     public boolean isActive() {
         return active;
+    }
+
+    /**
+     * @return tipo do CONTRATANTE: {@code pj} (empresa) ou {@code pf} (pessoa física); {@code null} quando não dá
+     *         para saber. Cliente é a CONTA, não a pessoa: uma conta PF pode ter várias pessoas dentro
+     */
+    public String getKind() {
+        return kind;
+    }
+
+    /** @return só PJ: razão social, quando difere do nome fantasia ({@link #getName()}); senão {@code null} */
+    public String getLegalName() {
+        return legalName;
+    }
+
+    /** @return só PJ: inscrição estadual (aceita {@code ISENTO}), ou {@code null} */
+    public String getStateRegistration() {
+        return stateRegistration;
+    }
+
+    /** @return só PJ: inscrição municipal, ou {@code null} */
+    public String getMunicipalRegistration() {
+        return municipalRegistration;
+    }
+
+    /** @return só PF: RG e órgão emissor (texto livre — varia por estado), ou {@code null} */
+    public String getIdDocument() {
+        return idDocument;
     }
 
     /** @return logotipo do cliente como a equipe subiu no bFocus, ou {@code null} */
