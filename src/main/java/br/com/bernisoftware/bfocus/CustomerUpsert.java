@@ -96,7 +96,7 @@ public final class CustomerUpsert extends PatchRequest {
          * @return este builder
          */
         public Builder legalName(String legalName) {
-            state.set("legalName", legalName);
+            state.set("legal_name", legalName);
             return this;
         }
 
@@ -107,7 +107,7 @@ public final class CustomerUpsert extends PatchRequest {
          * @return este builder
          */
         public Builder stateRegistration(String stateRegistration) {
-            state.set("stateRegistration", stateRegistration);
+            state.set("state_registration", stateRegistration);
             return this;
         }
 
@@ -118,7 +118,7 @@ public final class CustomerUpsert extends PatchRequest {
          * @return este builder
          */
         public Builder municipalRegistration(String municipalRegistration) {
-            state.set("municipalRegistration", municipalRegistration);
+            state.set("municipal_registration", municipalRegistration);
             return this;
         }
 
@@ -129,7 +129,7 @@ public final class CustomerUpsert extends PatchRequest {
          * @return este builder
          */
         public Builder idDocument(String idDocument) {
-            state.set("idDocument", idDocument);
+            state.set("id_document", idDocument);
             return this;
         }
 

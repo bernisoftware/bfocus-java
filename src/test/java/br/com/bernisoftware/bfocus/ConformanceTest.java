@@ -168,6 +168,22 @@ class ConformanceTest {
         if (a.has("document")) {
             b.document(a.str("document"));
         }
+        // Cliente PJ ou PF e os documentos de cada um (desde a 0.2.3).
+        if (a.has("kind")) {
+            b.kind(a.str("kind"));
+        }
+        if (a.has("legal_name")) {
+            b.legalName(a.str("legal_name"));
+        }
+        if (a.has("state_registration")) {
+            b.stateRegistration(a.str("state_registration"));
+        }
+        if (a.has("municipal_registration")) {
+            b.municipalRegistration(a.str("municipal_registration"));
+        }
+        if (a.has("id_document")) {
+            b.idDocument(a.str("id_document"));
+        }
         if (a.has("email")) {
             b.email(a.str("email"));
         }
