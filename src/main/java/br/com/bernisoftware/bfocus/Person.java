@@ -12,6 +12,7 @@ public class Person extends ApiObject {
     private final String name;
     private final String email;
     private final String phone;
+    private final String document;
     private final String role;
     private final boolean access;
     private final boolean primary;
@@ -25,6 +26,7 @@ public class Person extends ApiObject {
         name = w.string("name");
         email = w.string("email");
         phone = w.string("phone");
+        document = w.string("document");
         role = w.string("role");
         access = w.bool("access", false);
         primary = w.bool("is_primary", false);
@@ -55,6 +57,11 @@ public class Person extends ApiObject {
     /** @return telefone, ou {@code null} */
     public String getPhone() {
         return phone;
+    }
+
+    /** @return CPF da pessoa, só os 11 dígitos, ou {@code null} (não informado) */
+    public String getDocument() {
+        return document;
     }
 
     /** @return cargo/função, ou {@code null} */

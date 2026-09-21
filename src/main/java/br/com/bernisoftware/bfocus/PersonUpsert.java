@@ -27,6 +27,7 @@ public final class PersonUpsert extends PatchRequest {
             .field("name", "name")
             .field("email", "email")
             .field("phone", "phone")
+            .field("document", "document")
             .field("role", "role")
             .field("access", "access")
             .field("isPrimary", "is_primary")
@@ -86,6 +87,26 @@ public final class PersonUpsert extends PatchRequest {
          */
         public Builder phone(String phone) {
             state.set("phone", phone);
+            return this;
+        }
+
+        /**
+         * CPF da pessoa, com ou sem máscara (a resposta traz só os 11 dígitos).
+         *
+         * <p>A PESSOA É ÚNICA: o mesmo CPF é sempre o mesmo cadastro, em qualquer produto. Id desconhecido + CPF de
+         * uma ficha existente → a resposta vem com {@code merged_into} = id principal dela (o seu id vira identificador
+         * extra). Id de uma ficha + CPF de OUTRA → as duas são mescladas na hora ({@code merged_into} = a que tinha o
+         * CPF).
+         *
+         * <p>{@code null}/vazio NÃO apaga (nem via {@link #clear(String...)}; não é campo do {@link #erase(String...)}).
+         * Erros: 422 {@code PERSON_DOCUMENT_INVALID} (CPF inválido, {@code ValidationException}) e 409
+         * {@code PERSON_DOCUMENT_CONFLICT} (a ficha já tem OUTRO CPF — nunca troca sozinho, {@code ConflictException}).
+         *
+         * @param document o CPF ({@code null} = enviar {@code null}, que não apaga)
+         * @return este builder
+         */
+        public Builder document(String document) {
+            state.set("document", document);
             return this;
         }
 

@@ -39,15 +39,22 @@ public final class PeopleResource {
      * Não confunda com {@link PersonUpsert.Builder#clear(String...)}, que manda {@code null} — e em pessoa
      * {@code null} quer dizer "não mexe".
      *
+     * <p>{@link PersonUpsert.Builder#document(String)} é o CPF, e a pessoa é ÚNICA: o mesmo CPF é sempre o mesmo
+     * cadastro. Id desconhecido + CPF existente → {@code merged_into} com o id principal; id de uma ficha + CPF de
+     * outra → as duas são mescladas na hora. {@code null} não apaga.
+     *
      * @param customerExternalId id do cliente (empresa) no seu sistema
      * @param personExternalId id da pessoa no seu sistema
      * @param person campos a gravar
      * @return a pessoa gravada, com {@code status} ({@code created}/{@code updated}/{@code unchanged})
      * @throws ConflictException ex.: {@code PERSON_EMAIL_STAFF} (o e-mail é de alguém da sua equipe),
      *     {@code PERSON_EMAIL_TAKEN}/{@code PERSON_PHONE_TAKEN} (o {@code getData()} diz de quem é o contato) ou
-     *     {@code PERSON_CONTACT_OTHER_CUSTOMER} (recusa definitiva: a pessoa é de outro cliente); ou
-     *     {@code PERSON_CLEAR_NOT_OWN_RECORD}, quando um {@code erase} chega por um identificador extra
-     * @throws ValidationException {@code PERSON_CLEAR_FIELD_INVALID} — campo fora da lista aceita em {@code erase}
+     *     {@code PERSON_CONTACT_OTHER_CUSTOMER} (o contato é de uma pessoa de OUTRO cliente: a API não liga
+     *     sozinha; o dono vem em {@code getData()} para você ligar pelo identificador extra); ou
+     *     {@code PERSON_CLEAR_NOT_OWN_RECORD}, quando um {@code erase} chega por um identificador extra; ou
+     *     {@code PERSON_DOCUMENT_CONFLICT}, quando a ficha já tem OUTRO CPF (nunca troca sozinho)
+     * @throws ValidationException {@code PERSON_CLEAR_FIELD_INVALID} — campo fora da lista aceita em {@code erase};
+     *     {@code PERSON_DOCUMENT_INVALID} — CPF inválido
      */
     public PersonUpsertResult upsert(String customerExternalId, String personExternalId, PersonUpsert person) {
         return upsert(customerExternalId, personExternalId, person, null);

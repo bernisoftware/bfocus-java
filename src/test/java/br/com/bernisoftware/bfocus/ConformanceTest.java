@@ -226,6 +226,10 @@ class ConformanceTest {
         if (a.has("phone")) {
             b.phone(a.str("phone"));
         }
+        // CPF da pessoa (a pessoa é única).
+        if (a.has("document")) {
+            b.document(a.str("document"));
+        }
         if (a.has("role")) {
             b.role(a.str("role"));
         }
